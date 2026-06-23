@@ -1,0 +1,20 @@
+# Roblox / Rojo
+*.rbxl
+*.rbxlx
+*.rbxl.lock
+*.rbxlx.lock
+*.rbxm
+*.rbxmx
+
+# Rojo build output
+build/
+*.rbxl.bak
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Aftman / Foreman / Rokit tool managers (опционально — раскомментируй если используешь lockfile)
+# aftman.toml

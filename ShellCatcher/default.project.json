@@ -1,0 +1,111 @@
+{
+  "name": "ShellCatcher",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "$path": "src/ReplicatedStorage",
+      "Remotes": {
+        "$className": "Folder",
+        "OxygenUpdate": {
+          "$className": "RemoteEvent"
+        },
+        "PlayerAsphyxiated": {
+          "$className": "RemoteEvent"
+        },
+        "FireHarpoon": {
+          "$className": "RemoteEvent"
+        },
+        "CatchResult": {
+          "$className": "RemoteEvent"
+        },
+        "FireDrill": {
+          "$className": "RemoteEvent"
+        },
+        "DrillResult": {
+          "$className": "RemoteEvent"
+        },
+        "DrillOverheat": {
+          "$className": "RemoteEvent"
+        },
+        "UnlockZone": {
+          "$className": "RemoteEvent"
+        },
+        "EnterZone": {
+          "$className": "RemoteEvent"
+        },
+        "ZoneStateUpdate": {
+          "$className": "RemoteEvent"
+        },
+        "CollectAfkStorage": {
+          "$className": "RemoteEvent"
+        },
+        "AfkStateUpdate": {
+          "$className": "RemoteEvent"
+        },
+        "RequestRebirth": {
+          "$className": "RemoteEvent"
+        },
+        "RebirthResult": {
+          "$className": "RemoteEvent"
+        },
+        "SellInventory": {
+          "$className": "RemoteEvent"
+        },
+        "SellResult": {
+          "$className": "RemoteEvent"
+        },
+        "InventoryStateUpdate": {
+          "$className": "RemoteEvent"
+        },
+        "BuyUpgrade": {
+          "$className": "RemoteEvent"
+        },
+        "UpgradeStateUpdate": {
+          "$className": "RemoteEvent"
+        },
+        "PromptGamePassPurchase": {
+          "$className": "RemoteEvent"
+        },
+        "PromptProductPurchase": {
+          "$className": "RemoteEvent"
+        },
+        "OpenClientWindow": {
+          "$className": "RemoteEvent"
+        },
+        "PlayLocalSound": {
+          "$className": "RemoteEvent"
+        },
+        "RequestInitialState": {
+          "$className": "RemoteEvent"
+        }
+      },
+      "OpenShopBindable": {
+        "$className": "BindableEvent"
+      }
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "$path": "src/ServerScriptService"
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "$path": "src/StarterPlayerScripts"
+      }
+    },
+    "Workspace": {
+      "$className": "Workspace",
+      "$properties": {
+        "Gravity": 196.2
+      }
+    },
+    "SoundService": {
+      "$className": "SoundService",
+      "$properties": {
+        "RespectFilteringEnabled": true
+      }
+    }
+  }
+}
