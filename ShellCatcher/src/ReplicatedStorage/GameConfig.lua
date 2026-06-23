@@ -36,6 +36,9 @@ GameConfig.Zones = {
 		OxygenMultiplier = 1.15,
 		CatchValueMultiplier = 2.2,
 		HazardLevel = 0,
+		-- Ферри открывает погружение только при достаточной прокачке акваланга:
+		-- глубже -> нужен больший уровень узла OxygenCapacity (дерево навыков).
+		RequiredOxygenLevel = 1,
 	},
 	{
 		Id = "trench",
@@ -44,6 +47,7 @@ GameConfig.Zones = {
 		OxygenMultiplier = 1.35,
 		CatchValueMultiplier = 5.5,
 		HazardLevel = 1,           -- лёгкие шоковые/ядовитые силуэты
+		RequiredOxygenLevel = 3,
 	},
 	{
 		Id = "vent",
@@ -52,6 +56,7 @@ GameConfig.Zones = {
 		OxygenMultiplier = 1.6,
 		CatchValueMultiplier = 14,
 		HazardLevel = 2,           -- больше урона, нужен Resist-скилл/гейр
+		RequiredOxygenLevel = 5,
 	},
 	-- Задел на будущее расширение: просто добавляешь сюда новую запись,
 	-- остальные системы (магазин, спавнер, UI) читают список динамически.

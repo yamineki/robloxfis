@@ -79,6 +79,16 @@ function ZoneService.EnterZone(player, zoneId)
 		return false, "zone_locked"
 	end
 
+	-- Ферри гейтит погружение по прокачке акваланга: нужен достаточный уровень
+	-- узла OxygenCapacity в дереве навыков, чтобы нырять в более глубокую зону.
+	local zoneCfg = getZoneConfig(zoneId)
+	if zoneCfg and zoneCfg.RequiredOxygenLevel and zoneCfg.RequiredOxygenLevel > 0 then
+		local oxyLevel = (profile.UpgradeLevels and profile.UpgradeLevels.OxygenCapacity) or 0
+		if oxyLevel < zoneCfg.RequiredOxygenLevel then
+			return false, "needs_oxygen_upgrade"
+		end
+	end
+
 	local zoneFolder = workspace:FindFirstChild("Zones") and workspace.Zones:FindFirstChild(zoneId)
 	if not zoneFolder then
 		warn("[ZoneService] Зона не найдена в workspace:", zoneId)

@@ -509,16 +509,25 @@ local function renderSkillTree()
 
 	if not latestUpgradeSnapshot then return end
 
+	-- Последовательное раскрытие: узел показывается, только если он уже доступен
+	-- для покупки (IsUnlocked: родитель куплен ≥1 уровня). Заблокированные глубокие
+	-- узлы скрыты и появляются по мере прокачки ветки — а не все сразу.
+	local function isVisible(info)
+		return info ~= nil and info.IsUnlocked ~= false
+	end
+
 	-- Сначала линии (чтобы узлы рисовались поверх них), потом узлы
 	for nodeKey, info in pairs(latestUpgradeSnapshot) do
-		if info.ParentKey then
+		if isVisible(info) and info.ParentKey then
 			local parentInfo = latestUpgradeSnapshot[info.ParentKey]
-			if parentInfo then
+			-- Родитель видим всегда (он куплен, раз этот узел доступен), либо это корень.
+			local parentVisible = parentInfo and (parentInfo.IsRoot or isVisible(parentInfo) or (parentInfo.CurrentLevel or 0) > 0)
+			if parentInfo and parentVisible then
 				local fromPos = parentInfo.IsRoot and TREE_CENTER or polarToCanvasPosition(parentInfo.Angle, parentInfo.Radius)
 				local toPos = polarToCanvasPosition(info.Angle, info.Radius)
-				local lineColor = info.IsUnlocked == false
-					and Color3.fromRGB(55, 60, 68)
-					or (GameConfig.BranchColors[info.Branch] or THEME.Accent)
+				local lineColor = (info.CurrentLevel or 0) > 0
+					and (GameConfig.BranchColors[info.Branch] or THEME.Accent)
+					or Color3.fromRGB(90, 96, 104)
 				drawTreeLine(treeCanvas, fromPos, toPos, lineColor, "Line_" .. nodeKey)
 			end
 		end
@@ -531,13 +540,15 @@ local function renderSkillTree()
 	end)
 
 	for nodeKey, info in pairs(latestUpgradeSnapshot) do
-		local canvasPos = polarToCanvasPosition(info.Angle, info.Radius)
-		local branchColor = GameConfig.BranchColors[info.Branch] or THEME.Accent
-		local clickArea = drawTreeNode(treeCanvas, nodeKey, info, canvasPos, branchColor)
+		if isVisible(info) then
+			local canvasPos = polarToCanvasPosition(info.Angle, info.Radius)
+			local branchColor = GameConfig.BranchColors[info.Branch] or THEME.Accent
+			local clickArea = drawTreeNode(treeCanvas, nodeKey, info, canvasPos, branchColor)
 
-		clickArea.MouseButton1Click:Connect(function()
-			updateDetailsPanel(nodeKey)
-		end)
+			clickArea.MouseButton1Click:Connect(function()
+				updateDetailsPanel(nodeKey)
+			end)
+		end
 	end
 end
 
