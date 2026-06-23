@@ -84,6 +84,79 @@ local function addProximityPrompt(part, actionText, objectText, holdDuration)
 	return prompt
 end
 
+-- Позиция на кольце острова по углу (градусы) и радиусу (studs от центра)
+local function ringPosition(angleDeg, radius, y)
+	local a = math.rad(angleDeg or 0)
+	return Vector3.new(math.cos(a) * radius, y or 0, math.sin(a) * radius)
+end
+
+-- ============================================================
+-- ПОДЛОДКА-ЗАГЛУШКА (Model "Submarine")
+-- Узнаваемый силуэт субмарины из простых Part: корпус-цилиндр, рубка, перископ,
+-- хвостовые плавники, винт, неоновые иллюминаторы. Якорный плейсхолдер — игрок
+-- заменит на свою модель, сохранив имя Model "Submarine".
+-- ============================================================
+local function buildSubmarine(name, parent, cframe)
+	local model = Instance.new("Model")
+	model.Name = name or "Submarine"
+
+	local function piece(pname, size, offsetCFrame, color, material, shape)
+		local p = Instance.new("Part")
+		p.Name = pname
+		p.Size = size
+		p.CFrame = cframe * offsetCFrame
+		p.Color = color
+		p.Material = material or Enum.Material.Metal
+		p.Shape = shape or Enum.PartType.Block
+		p.Anchored = true
+		p.CanCollide = true
+		p.Parent = model
+		return p
+	end
+
+	local hullColor = Color3.fromRGB(210, 200, 70)   -- жёлтая «классическая» субмарина-заглушка
+	local trimColor = Color3.fromRGB(60, 70, 90)
+
+	-- Корпус (длинный цилиндр лежит вдоль локальной оси X — Cylinder вытянут по X)
+	local hull = piece("Hull", Vector3.new(20, 6, 6), CFrame.new(0, 0, 0), hullColor, Enum.Material.Metal, Enum.PartType.Cylinder)
+	model.PrimaryPart = hull
+	-- Нос-конус
+	piece("Nose", Vector3.new(3, 4.6, 4.6), CFrame.new(10.5, 0, 0), hullColor, Enum.Material.Metal, Enum.PartType.Ball)
+	-- Корма
+	piece("Tail", Vector3.new(3, 4.6, 4.6), CFrame.new(-10.5, 0, 0), hullColor, Enum.Material.Metal, Enum.PartType.Ball)
+	-- Рубка
+	piece("ConningTower", Vector3.new(4, 3, 3.4), CFrame.new(1, 4, 0), trimColor)
+	-- Перископ
+	piece("Periscope", Vector3.new(0.4, 3, 0.4), CFrame.new(1, 6.4, 0), trimColor, Enum.Material.Metal, Enum.PartType.Cylinder)
+	-- Хвостовые плавники
+	piece("FinTop", Vector3.new(3, 3, 0.4), CFrame.new(-9, 2.4, 0), trimColor)
+	piece("FinSide", Vector3.new(3, 0.4, 5), CFrame.new(-9, 0, 0), trimColor)
+	-- Винт
+	piece("Propeller", Vector3.new(0.5, 4, 4), CFrame.new(-12.4, 0, 0), Color3.fromRGB(120, 120, 130), Enum.Material.Metal, Enum.PartType.Cylinder)
+	-- Иллюминаторы (неоновые)
+	for i = -1, 1 do
+		local port = piece("Porthole", Vector3.new(0.4, 1.1, 1.1), CFrame.new(i * 4, 0.5, 3.05), Color3.fromRGB(120, 230, 255), Enum.Material.Neon, Enum.PartType.Cylinder)
+		port.CanCollide = false
+	end
+
+	model.Parent = parent
+	return model
+end
+
+-- Домик-заглушка для NPC без отдельного игрового здания (Quartermaster/Ferry).
+-- Возвращает Part-«здание», на который вешается NameTag.
+local function buildHut(name, parent, position, color, labelText)
+	local body = makePart(name, parent, Vector3.new(10, 12, 10), position + Vector3.new(0, 6, 0), color)
+	-- Дверной проём (тёмный блок-вырез) и крыша-призма для узнаваемости
+	makePart(name .. "_Roof", parent, Vector3.new(12, 3, 12), position + Vector3.new(0, 13.5, 0), color:Lerp(Color3.new(0, 0, 0), 0.35))
+	local door = makePart(name .. "_Door", parent, Vector3.new(3, 5, 0.5), position + Vector3.new(0, 2.5, 5), Color3.fromRGB(40, 30, 25))
+	door.CanCollide = false
+	if labelText then
+		addNameTag(body, labelText, color)
+	end
+	return body
+end
+
 -- ============================================================
 -- 1. ОСТРОВ-ХАБ (общий для всех 6 игроков)
 -- ============================================================
@@ -157,17 +230,23 @@ function MapBuilder.BuildIslandBuildings()
 	buildingsFolder.Name = "Buildings"
 	buildingsFolder.Parent = island
 
-	-- Здания расставлены по кругу вокруг центра острова, на равном расстоянии
-	local buildingCount = #GameConfig.IslandBuildings
+	-- Здания расставлены по кольцу острова по СВОЕМУ углу (совпадает с углом «своего»
+	-- NPC), 1 здание = 1 NPC. Радиус — общий из GameConfig.IslandLayout.
+	local buildingRadius = GameConfig.IslandLayout.BuildingRadius
 	for index, buildingConfig in ipairs(GameConfig.IslandBuildings) do
-		local angle = (index / buildingCount) * math.pi * 2
-		local x = math.cos(angle) * 35
-		local z = math.sin(angle) * 35
+		local angleDeg = buildingConfig.Angle or ((index / #GameConfig.IslandBuildings) * 360)
+		local pos = ringPosition(angleDeg, buildingRadius, 6)
 
 		local buildingPart = makePart(
 			buildingConfig.Id, buildingsFolder,
-			Vector3.new(10, 12, 10), Vector3.new(x, 6, z),
+			Vector3.new(10, 12, 10), pos,
 			buildingColors[buildingConfig.Id] or Color3.fromRGB(150, 150, 150)
+		)
+		-- Крыша для узнаваемости силуэта здания
+		makePart(
+			buildingConfig.Id .. "_Roof", buildingsFolder,
+			Vector3.new(12, 3, 12), pos + Vector3.new(0, 7.5, 0),
+			(buildingColors[buildingConfig.Id] or Color3.fromRGB(150, 150, 150)):Lerp(Color3.new(0, 0, 0), 0.35)
 		)
 
 		addNameTag(buildingPart, buildingConfig.Name, buildingColors[buildingConfig.Id])
@@ -323,12 +402,30 @@ function MapBuilder.BuildIslandNPCs()
 	npcFolder.Name = "NPCs"
 	npcFolder.Parent = island
 
+	-- Отдельные постройки-заглушки для NPC без игрового здания (Quartermaster/Ferry)
+	-- и причал с подлодкой. Лежат в той же папке Buildings рядом со своим NPC.
+	local buildingsFolder = island:FindFirstChild("Buildings")
+
+	local npcRadius = GameConfig.IslandLayout.NpcRadius
+	local subRadius = GameConfig.IslandLayout.SubmarineRadius
+
 	for _, npcConfig in ipairs(GameConfig.NPCs) do
-		local angleRad = math.rad(npcConfig.Angle or 0)
-		local radius = npcConfig.Radius or 24
-		local x = math.cos(angleRad) * radius
-		local z = math.sin(angleRad) * radius
-		local position = Vector3.new(x, 2, z)
+		-- NPC стоит «у входа» своего здания — на том же угле, чуть ближе к центру.
+		local position = ringPosition(npcConfig.Angle, npcRadius, 2)
+
+		-- Если у NPC нет игрового здания — строим домик-заглушку у него за спиной (дальше от центра).
+		if not npcConfig.BuildingId and buildingsFolder then
+			local hutPos = ringPosition(npcConfig.Angle, GameConfig.IslandLayout.BuildingRadius, 0)
+			buildHut("station_" .. npcConfig.Id, buildingsFolder, hutPos, npcConfig.BuildingColor or Color3.fromRGB(120, 130, 150), npcConfig.BuildingName)
+		end
+
+		-- Подлодка-отправление на «берегу» рядом с Ферри (дальше всех от центра, на воде).
+		if npcConfig.HasSubmarine then
+			local subPos = ringPosition(npcConfig.Angle, subRadius, -1)
+			-- Носом наружу от острова (в сторону открытой воды).
+			local outwardCFrame = CFrame.lookAt(subPos, subPos + ringPosition(npcConfig.Angle, 1, 0))
+			buildSubmarine("ShoreSubmarine", island, outwardCFrame)
+		end
 
 		local model, root = buildNpcModel(npcConfig, position)
 		model.Parent = npcFolder
@@ -407,15 +504,21 @@ function MapBuilder.BuildZone(zoneConfig)
 		zoneColors[zoneConfig.Id]
 	)
 
-	-- Точки спавна игрока при входе в зону (ZoneService.EnterZone ищет SpawnPoints)
+	-- Подлодка-база зоны: стоит на месте, пока игрок в зоне (его «дом» под водой).
+	-- Игрок появляется рядом с ней. Плейсхолдер — заменяется на свою модель, имя "Submarine".
+	local subCFrame = CFrame.new(worldOffset + Vector3.new(0, -15, 0))
+	buildSubmarine("Submarine", zoneFolder, subCFrame)
+
+	-- Точки спавна игрока при входе в зону (ZoneService.EnterZone ищет SpawnPoints) —
+	-- кольцом вокруг подлодки, чтобы игрок «выныривал» рядом с ней.
 	local spawnPoints = Instance.new("Folder")
 	spawnPoints.Name = "SpawnPoints"
 	spawnPoints.Parent = zoneFolder
 	for i = 1, 6 do
 		local angle = (i / 6) * math.pi * 2
-		local x = math.cos(angle) * 10
-		local z = math.sin(angle) * 10
-		makeSpawnPoint("Spawn_" .. i, spawnPoints, worldOffset + Vector3.new(x, -15, z))
+		local x = math.cos(angle) * 14
+		local z = math.sin(angle) * 14
+		makeSpawnPoint("Spawn_" .. i, spawnPoints, worldOffset + Vector3.new(x, -13, z))
 	end
 
 	-- Точки спавна силуэтов добычи (ZoneSpawnerService ищет CreatureSpawnPoints)

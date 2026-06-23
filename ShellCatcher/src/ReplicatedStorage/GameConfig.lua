@@ -364,12 +364,22 @@ GameConfig.SoundVolumes = {
 -- ============================================================
 -- ЭКОНОМИКА БАЗОВЫХ ЗДАНИЙ НА ОСТРОВЕ (разблокируются по отдельности)
 -- ============================================================
+-- Каждое здание привязано к углу кольца острова (Angle, градусы) и совпадает с углом
+-- "своего" NPC из GameConfig.NPCs (1 здание = 1 NPC). skin_workshop без NPC.
 GameConfig.IslandBuildings = {
-	{ Id = "shop_basic",     Name = "Trading Stall",       UnlockCost = 0 },
-	{ Id = "storage_room",   Name = "Storage Shed",        UnlockCost = 500 },
-	{ Id = "afk_dock",       Name = "Auto-Sorter Dock",    UnlockCost = 3000 }, -- AFK-машина
-	{ Id = "skin_workshop",  Name = "Skin Workshop",       UnlockCost = 1500 },
-	{ Id = "rebirth_altar",  Name = "Rebirth Altar",       UnlockCost = 10000 },
+	{ Id = "shop_basic",     Name = "Trading Stall",       UnlockCost = 0,    Angle = 150 },
+	{ Id = "storage_room",   Name = "Storage Shed",        UnlockCost = 500,  Angle = 210 },
+	{ Id = "afk_dock",       Name = "Auto-Sorter Dock",    UnlockCost = 3000, Angle = 330 }, -- AFK-машина
+	{ Id = "skin_workshop",  Name = "Skin Workshop",       UnlockCost = 1500, Angle = 0 },
+	{ Id = "rebirth_altar",  Name = "Rebirth Altar",       UnlockCost = 10000,Angle = 270 },
+}
+
+-- Радиусы кольца острова (studs от центра): здания снаружи, их NPC чуть ближе к центру
+-- (стоят "у входа" в своё здание). Подлодка-причал Ферри ещё дальше, на «берегу».
+GameConfig.IslandLayout = {
+	BuildingRadius = 44,
+	NpcRadius = 34,
+	SubmarineRadius = 64,
 }
 
 -- ============================================================
@@ -438,13 +448,16 @@ GameConfig.JellyfishNames = {
 --   RebirthPriest -> открывает окно ребирта
 -- Angle/Radius — расстановка по кольцу вокруг центра острова.
 -- ============================================================
+-- BuildingId — здание, у входа которого стоит NPC. Если nil, MapBuilder построит
+-- для него отдельный домик-заглушку (Quartermaster — арсенал, FerryCaptain — причал
+-- с подлодкой). HasSubmarine — у этого NPC на «берегу» стоит подлодка-отправление.
 GameConfig.NPCs = {
-	{ Id = "quartermaster", Name = "Quartermaster Brine",  Role = "Quartermaster", Angle = 90,  Radius = 24, Color = Color3.fromRGB(80, 150, 220) },
-	{ Id = "ferry_captain", Name = "Ferry Captain Maris",  Role = "FerryCaptain",  Angle = 30,  Radius = 26, Color = Color3.fromRGB(70, 200, 210) },
-	{ Id = "shopkeeper",    Name = "Trader Bramble",       Role = "Shopkeeper",    Angle = 150, Radius = 24, Color = Color3.fromRGB(90, 200, 120) },
-	{ Id = "storage_keep",  Name = "Net Mender Tilly",     Role = "StorageKeeper", Angle = 210, Radius = 24, Color = Color3.fromRGB(180, 150, 110) },
-	{ Id = "afk_operator",  Name = "Dock Boy Wren",        Role = "AfkOperator",   Angle = 330, Radius = 26, Color = Color3.fromRGB(80, 200, 255) },
-	{ Id = "rebirth_priest",Name = "Tide Priestess Ova",   Role = "RebirthPriest", Angle = 270, Radius = 24, Color = Color3.fromRGB(250, 200, 70) },
+	{ Id = "quartermaster", Name = "Quartermaster Brine",  Role = "Quartermaster", Angle = 90,  BuildingId = nil,            BuildingName = "Armory",       BuildingColor = Color3.fromRGB(120, 130, 150), Color = Color3.fromRGB(80, 150, 220) },
+	{ Id = "ferry_captain", Name = "Ferry Captain Maris",  Role = "FerryCaptain",  Angle = 30,  BuildingId = nil,            BuildingName = "Sub Dock",     BuildingColor = Color3.fromRGB(70, 110, 130),  HasSubmarine = true, Color = Color3.fromRGB(70, 200, 210) },
+	{ Id = "shopkeeper",    Name = "Trader Bramble",       Role = "Shopkeeper",    Angle = 150, BuildingId = "shop_basic",   Color = Color3.fromRGB(90, 200, 120) },
+	{ Id = "storage_keep",  Name = "Net Mender Tilly",     Role = "StorageKeeper", Angle = 210, BuildingId = "storage_room", Color = Color3.fromRGB(180, 150, 110) },
+	{ Id = "afk_operator",  Name = "Dock Boy Wren",        Role = "AfkOperator",   Angle = 330, BuildingId = "afk_dock",     Color = Color3.fromRGB(80, 200, 255) },
+	{ Id = "rebirth_priest",Name = "Tide Priestess Ova",   Role = "RebirthPriest", Angle = 270, BuildingId = "rebirth_altar",Color = Color3.fromRGB(250, 200, 70) },
 }
 
 -- Роль -> имя клиентского окна, которое сервер просит открыть (OpenClientWindow).
