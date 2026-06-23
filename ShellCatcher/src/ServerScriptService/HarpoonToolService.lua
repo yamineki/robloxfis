@@ -43,27 +43,6 @@ local function rollRarity()
 	return GameConfig.Rarities[1]
 end
 
--- Лопнувший мусор — мгновенная мелкая награда в Shells (не занимает слот инвентаря).
-local function rewardTrash(player, trashPart)
-	local profile = DataService.Get(player)
-	if not profile then return end
-
-	local value = trashPart:GetAttribute("TrashValue") or GameConfig.Trash.BaseValue
-	profile.Currency.Shells += value
-	profile.Stats.TotalShellsEarned += value
-
-	CatchResultRemote:FireClient(player, {
-		Success = true,
-		IsTrash = true,
-		TrashKind = trashPart:GetAttribute("TrashKind") or "trash",
-		Value = value,
-	})
-	SoundService.PlayAt("CoinPickup", trashPart)
-	-- Обновляем валюту в HUD (тот же канал, что и дерево навыков читает currentShells).
-	UpgradeStateRemote:FireClient(player, UpgradeService.GetFullSnapshot(player), profile.Currency.Shells)
-	trashPart:Destroy()
-end
-
 -- target: Instance в воркспейсе с атрибутом Health (медуза-модель или мусор-парт)
 local function applyDamageAndMaybeCatch(player, target)
 	local health = target:GetAttribute("Health") or 0
@@ -73,12 +52,6 @@ local function applyDamageAndMaybeCatch(player, target)
 	target:SetAttribute("Health", health)
 
 	if health > 0 then return end
-
-	-- Мусор: лопается ради Shells, без редкости/инвентаря.
-	if target:GetAttribute("Trash") then
-		rewardTrash(player, target)
-		return
-	end
 
 	-- Медуза: RNG-раскрытие редкости и добавление в инвентарь.
 	local rarity = rollRarity()
@@ -112,6 +85,7 @@ FireHarpoonRemote.OnServerEvent:Connect(function(player, silhouetteInstance)
 	if typeof(silhouetteInstance) ~= "Instance" then return end
 	if not silhouetteInstance:IsDescendantOf(workspace) then return end
 	if not silhouetteInstance:GetAttribute("Health") then return end -- не похож на валидную цель
+	if not silhouetteInstance:GetAttribute("Catchable") then return end -- пузырь ловит только медуз, не мусор
 
 	local now = os.clock()
 	local fireRate = UpgradeService.GetStatValue(player, "HarpoonFireRate") or GameConfig.Tools.HarpoonNet.BaseFireRate

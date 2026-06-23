@@ -211,8 +211,8 @@ local function fireBubbleCannon(tool)
 
 	if result then
 		toPos = result.Position
+		-- Пузырь ловит ТОЛЬКО медуз — мусор и ресурсы для него невидимы (исключительность по дизайну).
 		target = findAncestorWithAttribute(result.Instance, "Catchable")
-			or findAncestorWithAttribute(result.Instance, "Trash")
 	else
 		local unitRay = camera:ViewportPointToRay(mouse.X, mouse.Y)
 		toPos = unitRay.Origin + unitRay.Direction * 60
@@ -242,8 +242,9 @@ local function releaseLaser(tool)
 	spawnLaserBeam(fromPos, toPos)
 
 	-- Лазер дробит ресурсные блоки И крупный мусор перед собой.
+	-- Лазер дробит ресурсы/мусор, но НИКОГДА медуз — даже если луч случайно задел силуэт.
 	local target
-	if result then
+	if result and not findAncestorWithAttribute(result.Instance, "Catchable") then
 		target = findAncestorWithAttribute(result.Instance, "ResourceId")
 			or findAncestorWithAttribute(result.Instance, "Trash")
 	end

@@ -88,6 +88,7 @@ FireDrillRemote.OnServerEvent:Connect(function(player, targetInstance, isLaser)
 	if typeof(targetInstance) ~= "Instance" then return end
 	if not targetInstance:IsDescendantOf(workspace) then return end
 	if not targetInstance:GetAttribute("Health") then return end
+	if targetInstance:GetAttribute("Catchable") then return end -- лазер/дробилка не бьёт медуз
 
 	local now = os.clock()
 	local fireRate = UpgradeService.GetStatValue(player, "DrillFireRate") or GameConfig.Tools.CrusherDrill.BaseFireRate

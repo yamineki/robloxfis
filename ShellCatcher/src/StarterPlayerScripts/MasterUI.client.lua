@@ -270,7 +270,16 @@ local inventorySummaryLabel = makeLabel(
 	"0 / 30 slots used", 15, THEME.TextSecondary, THEME.FontRegular
 )
 
-local sellAllButton = makeButton("SellAllButton", inventoryContent, UDim2.new(1, 0, 0, 46), nil, "Sell All Catches", THEME.AccentGreen)
+local sellAllButton = makeButton("SellAllButton", inventoryContent, UDim2.new(1, 0, 0, 46), nil, "Deliver Catch to Trader", THEME.AccentGreen)
+
+-- Сундук: показывает, сколько Shells накопилось от сданной добычи, ещё НЕ забрано на счёт.
+-- Забрать можно через кнопку тут же или подойдя к физическому сундуку рядом с NPC.
+local chestSummaryLabel = makeLabel(
+	"ChestSummary", inventoryContent, UDim2.new(1, 0, 0, 24), nil,
+	"Chest: 0 Shells waiting", 14, THEME.AccentGold, THEME.FontRegular
+)
+
+local collectChestButton = makeButton("CollectChestButton", inventoryContent, UDim2.new(1, 0, 0, 40), nil, "Collect from Chest", THEME.AccentGold)
 
 local inventoryListFrame = Instance.new("Frame")
 inventoryListFrame.Name = "ItemList"
@@ -826,7 +835,15 @@ Remotes.DrillOverheat.OnClientEvent:Connect(function(isOverheated)
 end)
 
 Remotes.SellResult.OnClientEvent:Connect(function(totalEarned)
-	showToast(("Sold catches for %d Shells!"):format(math.floor(totalEarned)), THEME.AccentGold)
+	if totalEarned > 0 then
+		showToast(("Trader processed your catch -> %d Shells added to the chest"):format(math.floor(totalEarned)), THEME.AccentGold)
+	end
+end)
+
+local chestPending = 0
+Remotes.ChestStateUpdate.OnClientEvent:Connect(function(pending)
+	chestPending = pending or 0
+	chestSummaryLabel.Text = string.format("Chest: %d Shells waiting", math.floor(chestPending))
 end)
 
 Remotes.RebirthResult.OnClientEvent:Connect(function(resultData)
@@ -891,9 +908,82 @@ Remotes.PlayLocalSound.OnClientEvent:Connect(function(soundKey)
 	playSound(soundKey)
 end)
 
--- Кнопка продажи всего инвентаря
+-- Кнопка сдачи всей добычи продавцу (деньги уходят в сундук, не на счёт мгновенно)
 sellAllButton.MouseButton1Click:Connect(function()
 	Remotes.SellInventory:FireServer()
+end)
+
+-- Кнопка явного забора накопленного в сундуке (тот же эффект, что и подойти к физическому сундуку)
+collectChestButton.MouseButton1Click:Connect(function()
+	Remotes.CollectChest:FireServer()
+end)
+
+-- Визуальный поток "медузы летят к продавцу -> награды летят в сундук": плотность
+-- потока (количество летящих объектов) растёт с числом проданных за раз медуз.
+Remotes.SellFlowFx.OnClientEvent:Connect(function(itemCount, totalValue)
+	if itemCount <= 0 then return end
+	local character = player.Character
+	local fromPos = character and character:FindFirstChild("HumanoidRootPart") and character.HumanoidRootPart.Position
+	if not fromPos then return end
+
+	local npcsFolder = workspace:FindFirstChild("Island") and workspace.Island:FindFirstChild("NPCs")
+	local npcPos, chestPos
+	if npcsFolder then
+		for _, child in ipairs(npcsFolder:GetChildren()) do
+			if child:GetAttribute("Role") == "Collector" and child.PrimaryPart then
+				npcPos = child.PrimaryPart.Position
+			elseif child.Name == "RewardChest" and child.PrimaryPart then
+				chestPos = child.PrimaryPart.Position
+			end
+		end
+	end
+	npcPos = npcPos or fromPos
+	chestPos = chestPos or npcPos
+
+	local streamCount = math.clamp(itemCount, 1, 12) -- кап на отрисовку, чтобы не лагало при огромных продажах
+	for i = 1, streamCount do
+		task.delay((i - 1) * 0.08, function()
+			-- Медуза летит игрок -> продавец
+			local jelly = Instance.new("Part")
+			jelly.Shape = Enum.PartType.Ball
+			jelly.Size = Vector3.new(1, 1, 1)
+			jelly.Material = Enum.Material.Neon
+			jelly.Color = Color3.fromRGB(150, 255, 200)
+			jelly.Anchored = true
+			jelly.CanCollide = false
+			jelly.Position = fromPos + Vector3.new(math.random(-2, 2), 2, math.random(-2, 2))
+			jelly.Parent = workspace
+
+			local tween1 = TweenService:Create(jelly, TweenInfo.new(0.55, Enum.EasingStyle.Quad), {
+				Position = npcPos + Vector3.new(0, 3, 0),
+			})
+			tween1:Play()
+			tween1.Completed:Connect(function()
+				jelly:Destroy()
+				-- Награда (монета) летит продавец -> сундук
+				local coin = Instance.new("Part")
+				coin.Shape = Enum.PartType.Cylinder
+				coin.Size = Vector3.new(0.2, 0.8, 0.8)
+				coin.Material = Enum.Material.Neon
+				coin.Color = Color3.fromRGB(255, 210, 90)
+				coin.Anchored = true
+				coin.CanCollide = false
+				coin.Orientation = Vector3.new(0, 0, 90)
+				coin.Position = npcPos + Vector3.new(0, 3, 0)
+				coin.Parent = workspace
+
+				local tween2 = TweenService:Create(coin, TweenInfo.new(0.45, Enum.EasingStyle.Quad), {
+					Position = chestPos + Vector3.new(0, 2.2, 0),
+				})
+				tween2:Play()
+				tween2.Completed:Connect(function()
+					coin:Destroy()
+				end)
+			end)
+		end)
+	end
+
+	showToast(("%d jellyfish delivered to the trader"):format(itemCount), THEME.AccentGreen)
 end)
 
 -- ============================================================

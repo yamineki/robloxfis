@@ -78,6 +78,18 @@
         },
         "RequestInitialState": {
           "$className": "RemoteEvent"
+        },
+        "CollectChest": {
+          "$className": "RemoteEvent"
+        },
+        "ChestStateUpdate": {
+          "$className": "RemoteEvent"
+        },
+        "SellFlowFx": {
+          "$className": "RemoteEvent"
+        },
+        "PlayerDrowned": {
+          "$className": "RemoteEvent"
         }
       },
       "OpenShopBindable": {

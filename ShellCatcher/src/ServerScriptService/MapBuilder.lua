@@ -158,6 +158,35 @@ local function buildHut(name, parent, position, color, labelText)
 end
 
 -- ============================================================
+-- СУНДУК (Model "RewardChest") — стоит рядом с Collector NPC. Сюда визуально летят
+-- награды после сдачи добычи продавцу; у сундука свой ProximityPrompt "CollectChestPrompt",
+-- которым игрок ЯВНО забирает накопленную валюту (см. InventoryService.CollectChest).
+-- Заглушка-арт: лёгко заменить, сохранив имя модели/Part "Lid" для VFX крышки.
+-- ============================================================
+local function buildChest(parent, position)
+	local model = Instance.new("Model")
+	model.Name = "RewardChest"
+
+	local base = makePart("Base", model, Vector3.new(3, 1.6, 2), position + Vector3.new(0, 0.8, 0), Color3.fromRGB(120, 80, 40))
+	model.PrimaryPart = base
+
+	local lid = makePart("Lid", model, Vector3.new(3, 0.6, 2), position + Vector3.new(0, 1.9, 0), Color3.fromRGB(150, 110, 60))
+	lid.Anchored = true
+
+	local trim = makePart("Trim", model, Vector3.new(3.1, 0.2, 2.1), position + Vector3.new(0, 1.6, 0), Color3.fromRGB(210, 180, 90))
+	trim.Material = Enum.Material.Metal
+
+	addNameTag(base, "Reward Chest", Color3.fromRGB(255, 210, 90))
+
+	local prompt = addProximityPrompt(base, "Collect", "Reward Chest")
+	prompt.Name = "CollectChestPrompt"
+	prompt.MaxActivationDistance = 10
+
+	model.Parent = parent
+	return model
+end
+
+-- ============================================================
 -- 1. ОСТРОВ-ХАБ (общий для всех 6 игроков)
 -- ============================================================
 
@@ -215,8 +244,7 @@ end
 -- ============================================================
 
 local buildingColors = {
-	shop_basic     = Color3.fromRGB(90, 200, 120),  -- зелёный — торговая лавка
-	storage_room   = Color3.fromRGB(160, 140, 100), -- коричневый — склад
+	shop_basic     = Color3.fromRGB(90, 200, 120),  -- зелёный — торговая лавка (Collector NPC + сундук)
 	afk_dock       = Color3.fromRGB(80, 200, 255),  -- голубой — AFK-машина
 	skin_workshop  = Color3.fromRGB(230, 90, 200),  -- розовый — мастерская скинов
 	rebirth_altar  = Color3.fromRGB(250, 200, 70),  -- золотой — алтарь ребирта
@@ -278,8 +306,7 @@ end
 local roleActionText = {
 	Quartermaster = "Get Both Cannons",
 	FerryCaptain  = "Travel to Zones",
-	Shopkeeper    = "Open Shop",
-	StorageKeeper = "Inventory / Sell",
+	Collector     = "Deliver Catch",
 	AfkOperator   = "Auto-Sorter Dock",
 	RebirthPriest = "Rebirth",
 }
@@ -287,8 +314,7 @@ local roleActionText = {
 local roleSubtitle = {
 	Quartermaster = "Quartermaster",
 	FerryCaptain  = "Ferry Captain",
-	Shopkeeper    = "Trader",
-	StorageKeeper = "Net Mender",
+	Collector     = "Trader",
 	AfkOperator   = "Dock Hand",
 	RebirthPriest = "Tide Priestess",
 }
@@ -429,6 +455,12 @@ function MapBuilder.BuildIslandNPCs()
 
 		local model, root = buildNpcModel(npcConfig, position)
 		model.Parent = npcFolder
+
+		-- Сундук ставится чуть в стороне от NPC, на том же угле, ближе к зданию.
+		if npcConfig.HasChest then
+			local chestPos = ringPosition(npcConfig.Angle, npcRadius - 8, 0)
+			buildChest(npcFolder, chestPos)
+		end
 
 		-- Лёгкое покачивание (idle bob) + разворот лицом к центру острова.
 		task.spawn(function()

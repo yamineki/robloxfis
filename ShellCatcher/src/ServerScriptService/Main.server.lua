@@ -36,6 +36,9 @@ local InventoryStateRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForCh
 local ZoneStateRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("ZoneStateUpdate")
 local RebirthResultRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("RebirthResult")
 local RequestInitialStateRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("RequestInitialState")
+local SellFlowFxRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("SellFlowFx")
+local ChestStateRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("ChestStateUpdate")
+local CollectChestRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CollectChest")
 
 -- Строим карту-заглушку ДО запуска спавнера зон, иначе зонам некуда будет спавнить добычу
 MapBuilder.BuildEverything()
@@ -54,11 +57,10 @@ NPCService.Init()
 local OpenClientWindowRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("OpenClientWindow")
 
 local buildingPromptActions = {
-	shop_basic    = "Shop",
-	skin_workshop = "Shop",       -- мастерская скинов открывает тот же магазин (вкладка с косметикой)
+	shop_basic    = "Inventory",  -- Trading Stall = здание Collector NPC (сдача добычи / сундук)
+	skin_workshop = "Shop",       -- мастерская скинов открывает Robux-магазин (вкладка с косметикой)
 	afk_dock      = "Afk",
 	rebirth_altar = "Rebirth",
-	storage_room  = "Inventory",
 }
 
 local function connectBuildingPrompts()
@@ -92,6 +94,7 @@ local function pushFullState(player)
 	UpgradeStateRemote:FireClient(player, UpgradeService.GetFullSnapshot(player), profile.Currency.Shells)
 	InventoryStateRemote:FireClient(player, profile.Inventory.Items, InventoryService.GetMaxSlots(player))
 	ZoneStateRemote:FireClient(player, profile.UnlockedZones)
+	ChestStateRemote:FireClient(player, profile.Chest.PendingShells)
 
 	-- Снапшот ребирта (для окна Rebirth) — тихий, без всплывашки на клиенте.
 	RebirthResultRemote:FireClient(player, {
@@ -151,9 +154,24 @@ for _, player in ipairs(Players:GetPlayers()) do
 	setupCharacterHandling(player)
 end
 
+-- Сдача добычи продавцу: медузы из инвентаря "летят" к Collector NPC (визуал на клиенте
+-- через SellFlowFx), деньги попадают НЕ на счёт, а в Сундук — забрать их нужно отдельно.
 SellInventoryRemote.OnServerEvent:Connect(function(player)
-	local total = InventoryService.SellAll(player)
+	local total, itemCount = InventoryService.SellAll(player)
 	SellResultRemote:FireClient(player, total)
+	if itemCount > 0 then
+		SellFlowFxRemote:FireClient(player, itemCount, total)
+	end
+	ChestStateRemote:FireClient(player, InventoryService.GetChestPending(player))
+end)
+
+-- Игрок забирает накопленное в сундуке в реальную валюту.
+CollectChestRemote.OnServerEvent:Connect(function(player)
+	local collected = InventoryService.CollectChest(player)
+	if collected > 0 then
+		ChestStateRemote:FireClient(player, 0)
+		UpgradeStateRemote:FireClient(player, UpgradeService.GetFullSnapshot(player), DataService.Get(player).Currency.Shells)
+	end
 end)
 
 PromptGamePassRemote.OnServerEvent:Connect(function(player, gamePassKey)

@@ -21,6 +21,12 @@ local PlayerProfileTemplate = {
 		Items = {},       -- { {Id=..., RarityId=..., Value=...}, ... }
 	},
 
+	-- Сундук у NPC-сборщика: сюда попадают Shells после сдачи добычи продавцу,
+	-- ПЕРЕД тем как игрок явно нажмёт "забрать" — деньги не приходят мгновенно.
+	Chest = {
+		PendingShells = 0,
+	},
+
 	Tools = {
 		HarpoonNetLevel = 1,
 		CrusherDrillLevel = 1,

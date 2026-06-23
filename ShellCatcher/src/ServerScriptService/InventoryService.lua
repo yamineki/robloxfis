@@ -67,10 +67,17 @@ function InventoryService.AddCatch(player, catchData)
 	return true
 end
 
--- Продаёт всё содержимое инвентаря, возвращает заработанную сумму
+-- Сдаёт всё содержимое инвентаря продавцу (Collector NPC): очищает инвентарь, считает
+-- сумму, но НЕ начисляет её на счёт напрямую — она уходит в Сундук (см. CollectChest),
+-- как в Shell Divers: продавец принимает добычу и перерабатывает в награды, которые
+-- летят в сундук; настоящая валюта забирается отдельным явным действием у сундука.
+-- Возвращает (заработанная_сумма, количество_проданных_предметов).
 function InventoryService.SellAll(player)
 	local profile = DataService.Get(player)
-	if not profile then return 0 end
+	if not profile then return 0, 0 end
+
+	local itemCount = #profile.Inventory.Items
+	if itemCount == 0 then return 0, 0 end
 
 	local total = 0
 	for _, item in ipairs(profile.Inventory.Items) do
@@ -90,13 +97,35 @@ function InventoryService.SellAll(player)
 
 	total = total * catchBonus * rebirthBonus * boostMultiplier
 
-	profile.Currency.Shells += total
-	profile.Stats.TotalShellsEarned += total
 	profile.Inventory.Items = {}
+	profile.Stats.TotalShellsEarned += total
+	profile.Chest.PendingShells += total
 
 	SoundService.PlayToPlayer("SellAll", player)
 	pushInventoryState(player)
-	return total
+	return total, itemCount
+end
+
+-- Игрок явно забирает накопленное в сундуке — единственный момент, когда Shells
+-- реально попадают на счёт (никаких мгновенных "+N монет" при сдаче добычи).
+function InventoryService.CollectChest(player)
+	local profile = DataService.Get(player)
+	if not profile then return 0 end
+
+	local amount = profile.Chest.PendingShells
+	if amount <= 0 then return 0 end
+
+	profile.Chest.PendingShells = 0
+	profile.Currency.Shells += amount
+
+	SoundService.PlayToPlayer("CoinPickup", player)
+	return amount
+end
+
+function InventoryService.GetChestPending(player)
+	local profile = DataService.Get(player)
+	if not profile then return 0 end
+	return profile.Chest.PendingShells
 end
 
 return InventoryService
