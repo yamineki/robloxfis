@@ -177,9 +177,18 @@ local function spawnJellyfish(zoneFolder, zoneConfig)
 	local origin = point.Position
 	-- Плавное блуждание: дрейф вокруг origin + bob по Y. Tween'им ТОЛЬКО bell;
 	-- щупальца приварены (Massless, не Anchored) и едут за ним сами — без 20Hz цикла PivotTo.
+	-- Останавливается, как только медузу "ловят" пузырём (атрибут Captured) — дальше её
+	-- позицией управляет HarpoonToolService (полёт пузыря с медузой обратно к игроку).
+	local currentDriftTween
+	model:GetAttributeChangedSignal("Captured"):Connect(function()
+		if model:GetAttribute("Captured") and currentDriftTween then
+			currentDriftTween:Cancel()
+		end
+	end)
+
 	task.spawn(function()
 		local phase = math.random() * math.pi * 2
-		while model.Parent and bell.Parent do
+		while model.Parent and bell.Parent and not model:GetAttribute("Captured") do
 			phase += 0.6
 			local drift = Vector3.new(
 				math.random(-cfg.DriftRadius, cfg.DriftRadius),
@@ -194,8 +203,10 @@ local function spawnJellyfish(zoneFolder, zoneConfig)
 				TweenInfo.new(duration, Enum.EasingStyle.Sine),
 				{ CFrame = CFrame.new(goal) }
 			)
+			currentDriftTween = tween
 			tween:Play()
 			tween.Completed:Wait()
+			if model:GetAttribute("Captured") then break end
 		end
 	end)
 end

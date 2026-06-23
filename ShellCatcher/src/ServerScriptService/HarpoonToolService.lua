@@ -43,17 +43,11 @@ local function rollRarity()
 	return GameConfig.Rarities[1]
 end
 
--- target: Instance в воркспейсе с атрибутом Health (медуза-модель или мусор-парт)
-local function applyDamageAndMaybeCatch(player, target)
-	local health = target:GetAttribute("Health") or 0
-	local toolDamage = UpgradeService.GetStatValue(player, "HarpoonDamage") or GameConfig.Tools.HarpoonNet.BaseDamage
+-- Финализация поимки: вызывается ПОСЛЕ того как пузырь донёс медузу обратно к игроку
+-- (см. beginCapture) — редкость раскрывается именно здесь, в момент поимки.
+local function finalizeCatch(player, target)
+	if not target.Parent then return end -- игрок мог выйти из зоны/медузу уничтожило что-то ещё
 
-	health -= toolDamage
-	target:SetAttribute("Health", health)
-
-	if health > 0 then return end
-
-	-- Медуза: RNG-раскрытие редкости и добавление в инвентарь.
 	local rarity = rollRarity()
 	local baseValue = target:GetAttribute("BaseValue") or 5
 	local creatureId = target:GetAttribute("CreatureId") or "unknown"
@@ -72,13 +66,59 @@ local function applyDamageAndMaybeCatch(player, target)
 			RarityColor = rarity.Color,
 		})
 		SoundService.PlayAt("HarpoonCatchSuccess", target)
-		target:Destroy()
 	else
 		CatchResultRemote:FireClient(player, {
 			Success = false,
 			Reason = errorReason,
 		})
 	end
+
+	target:Destroy()
+end
+
+-- Это НЕ "собери лут" — пузырь физически облекает медузу и несёт её обратно к игроку
+-- несколько секунд (GameConfig.Jellyfish.CaptureTravelTime), и только потом она попадает
+-- в инвентарь. Captured=true блокирует повторные попадания/дрейф на время переноса.
+local function beginCapture(player, target)
+	target:SetAttribute("Captured", true)
+	local captureTime = GameConfig.Jellyfish.CaptureTravelTime or 2
+
+	task.spawn(function()
+		local startPos = target:GetPivot().Position
+		local elapsed = 0
+		while elapsed < captureTime do
+			if not target.Parent then return end
+			local character = player.Character
+			local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+			if not rootPart then
+				target:Destroy() -- игрок исчез (вышел/умер) — медуза не "зависает" в воздухе навечно
+				return
+			end
+
+			local dt = task.wait(0.05)
+			elapsed += dt
+			local alpha = math.clamp(elapsed / captureTime, 0, 1)
+			local goalPos = rootPart.Position + Vector3.new(0, 2.5, 0)
+			target:PivotTo(CFrame.new(startPos:Lerp(goalPos, alpha)))
+		end
+
+		finalizeCatch(player, target)
+	end)
+end
+
+-- target: Instance в воркспейсе с атрибутом Health (медуза-модель)
+local function applyDamageAndMaybeCatch(player, target)
+	if target:GetAttribute("Captured") then return end -- уже летит к игроку, повторный урон не считаем
+
+	local health = target:GetAttribute("Health") or 0
+	local toolDamage = UpgradeService.GetStatValue(player, "HarpoonDamage") or GameConfig.Tools.HarpoonNet.BaseDamage
+
+	health -= toolDamage
+	target:SetAttribute("Health", health)
+
+	if health > 0 then return end
+
+	beginCapture(player, target)
 end
 
 FireHarpoonRemote.OnServerEvent:Connect(function(player, silhouetteInstance)
@@ -86,6 +126,7 @@ FireHarpoonRemote.OnServerEvent:Connect(function(player, silhouetteInstance)
 	if not silhouetteInstance:IsDescendantOf(workspace) then return end
 	if not silhouetteInstance:GetAttribute("Health") then return end -- не похож на валидную цель
 	if not silhouetteInstance:GetAttribute("Catchable") then return end -- пузырь ловит только медуз, не мусор
+	if silhouetteInstance:GetAttribute("Captured") then return end -- уже в процессе поимки
 
 	local now = os.clock()
 	local fireRate = UpgradeService.GetStatValue(player, "HarpoonFireRate") or GameConfig.Tools.HarpoonNet.BaseFireRate
