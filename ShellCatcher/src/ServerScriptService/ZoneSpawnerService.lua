@@ -47,6 +47,66 @@ end
 -- МЕДУЗА
 -- ============================================================
 
+-- Билборд с названием + полоса урона (HP). Возвращает функцию обновления полосы.
+local function attachInfoBillboard(adornee, displayName, nameColor, maxHealth, yOffset)
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "InfoTag"
+	gui.Adornee = adornee
+	gui.Size = UDim2.fromOffset(150, 46)
+	gui.StudsOffsetWorldSpace = Vector3.new(0, yOffset or 2.6, 0)
+	gui.AlwaysOnTop = true
+	gui.MaxDistance = 120
+	gui.Parent = adornee
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Name = "NameLabel"
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Size = UDim2.new(1, 0, 0.55, 0)
+	nameLabel.Font = Enum.Font.GothamBold
+	nameLabel.TextScaled = true
+	nameLabel.TextColor3 = nameColor or Color3.fromRGB(255, 255, 255)
+	nameLabel.TextStrokeTransparency = 0.3
+	nameLabel.Text = displayName
+	nameLabel.Parent = gui
+
+	-- Фон полосы здоровья
+	local barBg = Instance.new("Frame")
+	barBg.Name = "HealthBarBg"
+	barBg.AnchorPoint = Vector2.new(0.5, 0)
+	barBg.Position = UDim2.new(0.5, 0, 0.6, 0)
+	barBg.Size = UDim2.new(0.9, 0, 0.32, 0)
+	barBg.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+	barBg.BackgroundTransparency = 0.25
+	barBg.BorderSizePixel = 0
+	barBg.Parent = gui
+	local bgCorner = Instance.new("UICorner")
+	bgCorner.CornerRadius = UDim.new(0, 4)
+	bgCorner.Parent = barBg
+
+	local barFill = Instance.new("Frame")
+	barFill.Name = "HealthBarFill"
+	barFill.Size = UDim2.new(1, 0, 1, 0)
+	barFill.BackgroundColor3 = Color3.fromRGB(90, 220, 120)
+	barFill.BorderSizePixel = 0
+	barFill.Parent = barBg
+	local fillCorner = Instance.new("UICorner")
+	fillCorner.CornerRadius = UDim.new(0, 4)
+	fillCorner.Parent = barFill
+
+	local function update(currentHealth)
+		local frac = math.clamp(currentHealth / math.max(1, maxHealth), 0, 1)
+		barFill.Size = UDim2.new(frac, 0, 1, 0)
+		-- Цвет от зелёного к красному по мере урона
+		barFill.BackgroundColor3 = Color3.fromRGB(
+			math.floor(90 + (1 - frac) * 165),
+			math.floor(60 + frac * 160),
+			90
+		)
+	end
+	update(maxHealth)
+	return update
+end
+
 local function buildJellyfish(zoneConfig, cframe)
 	local cfg = GameConfig.Jellyfish
 	local color = (cfg.ColorByZone and cfg.ColorByZone[zoneConfig.Id]) or Color3.fromRGB(170, 200, 255)
@@ -68,7 +128,8 @@ local function buildJellyfish(zoneConfig, cframe)
 	bell.Parent = model
 	model.PrimaryPart = bell
 
-	-- Щупальца — несколько тонких неоновых цилиндров под куполом
+	-- Щупальца — тонкие неоновые цилиндры под куполом. НЕ Anchored: приварены к bell,
+	-- поэтому двигаются автоматически вслед за твином bell (без ручного PivotTo-цикла = меньше лагов).
 	for i = 1, 5 do
 		local a = (i / 5) * math.pi * 2
 		local tentacle = Instance.new("Part")
@@ -77,8 +138,9 @@ local function buildJellyfish(zoneConfig, cframe)
 		tentacle.Color = color
 		tentacle.Material = Enum.Material.Neon
 		tentacle.Transparency = 0.55
-		tentacle.Anchored = true
+		tentacle.Anchored = false
 		tentacle.CanCollide = false
+		tentacle.Massless = true
 		tentacle.CFrame = cframe * CFrame.new(math.cos(a) * 0.8, -1.8, math.sin(a) * 0.8)
 		tentacle.Parent = model
 		local weld = Instance.new("WeldConstraint")
@@ -87,10 +149,19 @@ local function buildJellyfish(zoneConfig, cframe)
 		weld.Parent = bell
 	end
 
-	model:SetAttribute("Health", cfg.BaseHealth)
+	local maxHealth = cfg.BaseHealth
+	model:SetAttribute("Health", maxHealth)
+	model:SetAttribute("MaxHealth", maxHealth)
 	model:SetAttribute("BaseValue", 5 * zoneConfig.CatchValueMultiplier)
 	model:SetAttribute("CreatureId", "jellyfish_" .. zoneConfig.Id)
 	model:SetAttribute("Catchable", true)
+
+	-- Название + полоса урона над куполом, обновляется при изменении атрибута Health.
+	local jellyName = (GameConfig.JellyfishNames and GameConfig.JellyfishNames[zoneConfig.Id]) or "Медуза"
+	local updateBar = attachInfoBillboard(bell, jellyName, color, maxHealth, 2.8)
+	model:GetAttributeChangedSignal("Health"):Connect(function()
+		updateBar(model:GetAttribute("Health") or 0)
+	end)
 
 	return model, bell
 end
@@ -104,8 +175,8 @@ local function spawnJellyfish(zoneFolder, zoneConfig)
 	model.Parent = zoneFolder:FindFirstChild("Creatures") or zoneFolder
 
 	local origin = point.Position
-	-- Плавное блуждание: дрейф вокруг origin + bob по Y. Части модели Anchored и
-	-- приварены к bell, поэтому двигаем модель целиком (PivotTo) вслед за твином bell.
+	-- Плавное блуждание: дрейф вокруг origin + bob по Y. Tween'им ТОЛЬКО bell;
+	-- щупальца приварены (Massless, не Anchored) и едут за ним сами — без 20Hz цикла PivotTo.
 	task.spawn(function()
 		local phase = math.random() * math.pi * 2
 		while model.Parent and bell.Parent do
@@ -124,13 +195,7 @@ local function spawnJellyfish(zoneFolder, zoneConfig)
 				{ CFrame = CFrame.new(goal) }
 			)
 			tween:Play()
-			local elapsed = 0
-			while elapsed < duration and model.Parent do
-				task.wait(0.05)
-				elapsed += 0.05
-				model:PivotTo(bell.CFrame)
-			end
-			if not model.Parent then break end
+			tween.Completed:Wait()
 		end
 	end)
 end
@@ -145,10 +210,11 @@ local function spawnTrash(zoneFolder, zoneConfig)
 	if not point then return end
 
 	local kind = cfg.Kinds[math.random(1, #cfg.Kinds)]
+	local size = kind.Size or {1.6, 1.6, 1.6}
 
 	local part = Instance.new("Part")
 	part.Name = "FloatingTrash"
-	part.Size = Vector3.new(1.6, 1.6, 1.6)
+	part.Size = Vector3.new(size[1], size[2], size[3])
 	part.Shape = kind.Shape == "Cylinder" and Enum.PartType.Cylinder or Enum.PartType.Block
 	part.Color = kind.Color
 	part.Material = Enum.Material.SmoothPlastic
@@ -157,10 +223,19 @@ local function spawnTrash(zoneFolder, zoneConfig)
 	part.CanCollide = false
 	part.CFrame = point.CFrame * CFrame.new(0, math.random(2, 6), 0)
 
-	part:SetAttribute("Health", cfg.Health)
-	part:SetAttribute("TrashValue", math.floor(cfg.BaseValue * zoneConfig.CatchValueMultiplier))
+	local maxHealth = math.max(1, math.floor(cfg.Health * (kind.HealthMul or 1)))
+	local trashValue = math.max(1, math.floor(cfg.BaseValue * (kind.ValueMul or 1) * zoneConfig.CatchValueMultiplier))
+	part:SetAttribute("Health", maxHealth)
+	part:SetAttribute("MaxHealth", maxHealth)
+	part:SetAttribute("TrashValue", trashValue)
 	part:SetAttribute("Trash", true)
 	part:SetAttribute("TrashKind", kind.Id)
+
+	-- Название + полоса урона над мусором (билборд выше для крупных предметов).
+	local updateBar = attachInfoBillboard(part, kind.DisplayName or kind.Id, Color3.fromRGB(230, 230, 235), maxHealth, size[2] * 0.5 + 1.4)
+	part:GetAttributeChangedSignal("Health"):Connect(function()
+		updateBar(part:GetAttribute("Health") or 0)
+	end)
 
 	part.Parent = zoneFolder:FindFirstChild("Creatures") or zoneFolder
 

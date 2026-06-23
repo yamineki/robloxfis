@@ -95,6 +95,26 @@ GameConfig.Tools = {
 }
 
 -- ============================================================
+-- ЛАЗЕР CRUSHER DRILL (заряжаемый направленный выстрел)
+-- Дробилка НЕ стреляет мгновенно: игрок зажимает кнопку, оружие копит заряд
+-- (полоса заряда над пушкой), и при полном заряде выпускает большой направленный
+-- ЛАЗЕР, который дробит мусор/ресурсы на своём пути. Время заряда и урон лазера
+-- скейлятся веткой прокачки (DrillFireRate -> быстрее заряд, DrillDamage -> урон,
+-- DrillRange -> длина луча).
+-- ============================================================
+GameConfig.CrusherLaser = {
+	BaseChargeTime = 1.6,        -- секунд удержания до полного заряда на 1 уровне FireRate
+	MinChargeTime = 0.45,        -- предел, до которого может ускориться заряд прокачкой
+	ChargeTimePerFireRate = 0.18,-- на сколько секунд сокращается заряд за уровень DrillFireRate
+	BaseBeamLength = 28,         -- длина луча (studs) на базовом DrillRange
+	BeamLengthPerRange = 2.2,    -- +длина за единицу прибавки DrillRange над базой
+	BeamThickness = 1.6,         -- толщина визуального луча
+	BaseLaserDamage = 30,        -- урон лазера (он мощнее одиночного удара)
+	LaserDamagePerLevel = 8,     -- множитель от DrillDamage поверх базы
+	Color = Color3.fromRGB(255, 90, 40),
+}
+
+-- ============================================================
 -- ПРОКАЧКА — РАДИАЛЬНОЕ ДЕРЕВО НАВЫКОВ
 -- Узлы расходятся лучами от центрального узла "Start" (как круговое skill-дерево
 -- в духе ARPG: открыть узел можно только купив его прямого родителя).
@@ -377,16 +397,28 @@ GameConfig.Trash = {
 	MaxPerZone = 10,
 	SpawnInterval = 4,
 	BaseValue = 3,             -- базовые Shells за единицу мусора (умножается на CatchValueMultiplier зоны)
-	Health = 10,               -- сколько урона пузырём нужно нанести, чтобы лопнуть
+	Health = 10,               -- базовое здоровье мусора (умножается на HealthMul вида)
 	DriftSpeed = 4,            -- скорость медленного дрейфа (studs/сек ориентир для твина)
-	-- Виды мусора: имя + цвет + форма (для простых Part-заглушек)
+	-- Виды мусора: у каждого СВОЁ название (показывается билбордом), размер (большой/маленький),
+	-- здоровье (большой крепче) и ценность (большой дороже). Size — это Vector3-заготовка
+	-- через {x,y,z}, ValueMul/HealthMul — множители поверх BaseValue/здоровья.
 	Kinds = {
-		{ Id = "bottle",  Color = Color3.fromRGB(120, 200, 180), Shape = "Cylinder" },
-		{ Id = "can",     Color = Color3.fromRGB(180, 180, 190), Shape = "Cylinder" },
-		{ Id = "crate",   Color = Color3.fromRGB(150, 110, 70),  Shape = "Block" },
-		{ Id = "tire",    Color = Color3.fromRGB(40, 40, 45),    Shape = "Cylinder" },
-		{ Id = "bag",     Color = Color3.fromRGB(210, 210, 220), Shape = "Block" },
+		{ Id = "soda_can",    DisplayName = "Ржавая банка",     Color = Color3.fromRGB(180, 180, 190), Shape = "Cylinder", Size = {1.2, 1.2, 1.2}, HealthMul = 0.6, ValueMul = 0.7 },
+		{ Id = "bottle",      DisplayName = "Стеклянная бутылка", Color = Color3.fromRGB(120, 200, 180), Shape = "Cylinder", Size = {1.0, 2.0, 1.0}, HealthMul = 0.8, ValueMul = 1.0 },
+		{ Id = "plastic_bag", DisplayName = "Пакет",            Color = Color3.fromRGB(210, 210, 220), Shape = "Block",    Size = {1.6, 1.6, 0.4}, HealthMul = 0.5, ValueMul = 0.8 },
+		{ Id = "crate",       DisplayName = "Сломанный ящик",   Color = Color3.fromRGB(150, 110, 70),  Shape = "Block",    Size = {3.0, 3.0, 3.0}, HealthMul = 1.8, ValueMul = 2.4 },
+		{ Id = "tire",        DisplayName = "Покрышка",         Color = Color3.fromRGB(40, 40, 45),    Shape = "Cylinder", Size = {3.4, 1.2, 3.4}, HealthMul = 1.6, ValueMul = 2.0 },
+		{ Id = "barrel",      DisplayName = "Бочка с хламом",   Color = Color3.fromRGB(90, 130, 90),   Shape = "Cylinder", Size = {2.6, 3.4, 2.6}, HealthMul = 2.4, ValueMul = 3.2 },
+		{ Id = "anchor",      DisplayName = "Старый якорь",     Color = Color3.fromRGB(70, 75, 85),    Shape = "Block",    Size = {2.2, 4.0, 1.0}, HealthMul = 3.0, ValueMul = 4.5 },
 	},
+}
+
+-- Названия медуз по зоне (показываются билбордом над медузой)
+GameConfig.JellyfishNames = {
+	reef   = "Коралловая медуза",
+	kelp   = "Ламинариевая медуза",
+	trench = "Глубинная медуза",
+	vent   = "Жар-медуза",
 }
 
 -- ============================================================

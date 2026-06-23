@@ -14,6 +14,8 @@ local SoundService = require(script.Parent:WaitForChild("SoundService"))
 local FireDrillRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("FireDrill")
 local DrillResultRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("DrillResult")
 local OverheatRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("DrillOverheat")
+local CatchResultRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CatchResult")
+local UpgradeStateRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("UpgradeStateUpdate")
 
 local CrusherDrillService = {}
 
@@ -53,14 +55,39 @@ local function rewardResource(player, resourceBlock)
 	})
 end
 
-FireDrillRemote.OnServerEvent:Connect(function(player, resourceBlockInstance)
+-- Лопнувший лазером мусор -> мгновенные Shells (как у пузыря, но через дробилку).
+local function rewardTrash(player, trashPart)
+	local profile = DataService.Get(player)
+	if not profile then return end
+	local value = trashPart:GetAttribute("TrashValue") or GameConfig.Trash.BaseValue
+	profile.Currency.Shells += value
+	profile.Stats.TotalShellsEarned = (profile.Stats.TotalShellsEarned or 0) + value
+	CatchResultRemote:FireClient(player, {
+		Success = true,
+		IsTrash = true,
+		TrashKind = trashPart:GetAttribute("TrashKind") or "trash",
+		Value = value,
+	})
+	SoundService.PlayAt("DrillBreakBlock", trashPart)
+	UpgradeStateRemote:FireClient(player, UpgradeService.GetFullSnapshot(player), profile.Currency.Shells)
+	trashPart:Destroy()
+end
+
+-- Урон заряженного лазера скейлится веткой прокачки (DrillDamage).
+local function laserDamage(player)
+	local cfg = GameConfig.CrusherLaser
+	local levelDamage = UpgradeService.GetStatValue(player, "DrillDamage") or GameConfig.Tools.CrusherDrill.BaseDamage
+	return cfg.BaseLaserDamage + levelDamage
+end
+
+FireDrillRemote.OnServerEvent:Connect(function(player, targetInstance, isLaser)
 	if overheated[player.UserId] then
 		return -- инструмент перегрет, сервер игнорирует попытки стрельбы
 	end
 
-	if typeof(resourceBlockInstance) ~= "Instance" then return end
-	if not resourceBlockInstance:IsDescendantOf(workspace) then return end
-	if not resourceBlockInstance:GetAttribute("Health") then return end
+	if typeof(targetInstance) ~= "Instance" then return end
+	if not targetInstance:IsDescendantOf(workspace) then return end
+	if not targetInstance:GetAttribute("Health") then return end
 
 	local now = os.clock()
 	local fireRate = UpgradeService.GetStatValue(player, "DrillFireRate") or GameConfig.Tools.CrusherDrill.BaseFireRate
@@ -74,8 +101,10 @@ FireDrillRemote.OnServerEvent:Connect(function(player, resourceBlockInstance)
 	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
 	if not rootPart then return end
 
-	local distance = (rootPart.Position - resourceBlockInstance:GetPivot().Position).Magnitude
-	if distance > GameConfig.Tools.CrusherDrill.BaseRange + 3 then
+	-- Лазер бьёт дальше (направленный луч); ближний радиус — для обычного режима.
+	local maxRange = isLaser and (GameConfig.CrusherLaser.BaseBeamLength + 20) or (GameConfig.Tools.CrusherDrill.BaseRange + 3)
+	local distance = (rootPart.Position - targetInstance:GetPivot().Position).Magnitude
+	if distance > maxRange then
 		return
 	end
 
@@ -87,17 +116,22 @@ FireDrillRemote.OnServerEvent:Connect(function(player, resourceBlockInstance)
 		SoundService.PlayAt("DrillOverheat", rootPart)
 	end
 
-	SoundService.PlayAt("DrillFire", resourceBlockInstance)
+	SoundService.PlayAt("DrillFire", targetInstance)
 
-	local health = resourceBlockInstance:GetAttribute("Health")
-	local toolDamage = UpgradeService.GetStatValue(player, "DrillDamage") or GameConfig.Tools.CrusherDrill.BaseDamage
-	health -= toolDamage
-	resourceBlockInstance:SetAttribute("Health", health)
+	local health = targetInstance:GetAttribute("Health")
+	local damage = isLaser and laserDamage(player)
+		or (UpgradeService.GetStatValue(player, "DrillDamage") or GameConfig.Tools.CrusherDrill.BaseDamage)
+	health -= damage
+	targetInstance:SetAttribute("Health", health)
 
 	if health <= 0 then
-		SoundService.PlayAt("DrillBreakBlock", resourceBlockInstance)
-		rewardResource(player, resourceBlockInstance)
-		resourceBlockInstance:Destroy()
+		if targetInstance:GetAttribute("Trash") then
+			rewardTrash(player, targetInstance)
+		else
+			SoundService.PlayAt("DrillBreakBlock", targetInstance)
+			rewardResource(player, targetInstance)
+			targetInstance:Destroy()
+		end
 	end
 end)
 

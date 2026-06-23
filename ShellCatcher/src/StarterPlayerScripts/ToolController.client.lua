@@ -23,6 +23,8 @@ local player = Players.LocalPlayer
 local mouse = player:GetMouse()
 local camera = workspace.CurrentCamera
 
+local GameConfig = require(ReplicatedStorage:WaitForChild("GameConfig"))
+
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local FireHarpoonRemote = Remotes:WaitForChild("FireHarpoon")
 local FireDrillRemote = Remotes:WaitForChild("FireDrill")
@@ -73,27 +75,30 @@ local function muzzlePosition(tool)
 	return root and root.Position or Vector3.new(0, 0, 0)
 end
 
+-- Пузырь — КВАДРАТНЫЙ неоновый синий парт, летит МЕДЛЕННО к цели и слегка пульсирует размером.
 local function spawnBubble(fromPos, toPos)
+	local baseSize = 1.4
 	local bubble = Instance.new("Part")
-	bubble.Shape = Enum.PartType.Ball
-	bubble.Size = Vector3.new(1.1, 1.1, 1.1)
+	bubble.Shape = Enum.PartType.Block          -- квадратный пузырь по дизайну
+	bubble.Size = Vector3.new(baseSize, baseSize, baseSize)
 	bubble.Color = Color3.fromRGB(90, 190, 255)
 	bubble.Material = Enum.Material.Neon
-	bubble.Transparency = 0.55
+	bubble.Transparency = 0.4
 	bubble.Anchored = true
 	bubble.CanCollide = false
 	bubble.CanQuery = false
+	bubble.CastShadow = false
 	bubble.CFrame = CFrame.new(fromPos)
 	bubble.Parent = workspace
 
 	-- Лёгкое свечение пузыря
 	local light = Instance.new("PointLight")
 	light.Color = bubble.Color
-	light.Range = 6
-	light.Brightness = 1.5
+	light.Range = 7
+	light.Brightness = 1.6
 	light.Parent = bubble
 
-	-- Пульсация размера на лету (слегка "дышит")
+	-- Пульсация размера + лёгкое вращение на лету (слегка "дышит")
 	local pulseConn
 	local startClock = os.clock()
 	pulseConn = RunService.RenderStepped:Connect(function()
@@ -101,27 +106,97 @@ local function spawnBubble(fromPos, toPos)
 			pulseConn:Disconnect()
 			return
 		end
-		local s = 1.1 + math.sin((os.clock() - startClock) * 18) * 0.22
+		local s = baseSize + math.sin((os.clock() - startClock) * 10) * 0.28
 		bubble.Size = Vector3.new(s, s, s)
 	end)
 
-	-- Полёт к цели
+	-- МЕДЛЕННЫЙ полёт к цели (фиксированная скорость ~ 26 studs/сек)
 	local distance = (toPos - fromPos).Magnitude
-	local travelTime = math.clamp(distance / 90, 0.08, 0.35)
-	local travel = TweenService:Create(bubble, TweenInfo.new(travelTime, Enum.EasingStyle.Quad), {
-		CFrame = CFrame.new(toPos),
+	local travelTime = math.clamp(distance / 26, 0.3, 1.6)
+	local travel = TweenService:Create(bubble, TweenInfo.new(travelTime, Enum.EasingStyle.Linear), {
+		CFrame = CFrame.new(toPos) * CFrame.Angles(0, math.rad(120), 0),
 	})
 	travel:Play()
 	travel.Completed:Connect(function()
 		-- "Лопается": резко раздувается и исчезает
 		if pulseConn then pulseConn:Disconnect() end
 		local pop = TweenService:Create(bubble, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {
-			Size = Vector3.new(3.2, 3.2, 3.2),
+			Size = Vector3.new(3.4, 3.4, 3.4),
 			Transparency = 1,
 		})
 		pop:Play()
 		Debris:AddItem(bubble, 0.25)
 	end)
+end
+
+-- ============================================================
+-- ЛАЗЕР CRUSHER DRILL — заряжаемый направленный луч
+-- ============================================================
+
+-- Полоса заряда над пушкой (billboard на Handle), пока игрок держит кнопку.
+local function makeChargeBar(handle)
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "DrillChargeBar"
+	gui.Adornee = handle
+	gui.Size = UDim2.fromOffset(90, 12)
+	gui.StudsOffsetWorldSpace = Vector3.new(0, 2, 0)
+	gui.AlwaysOnTop = true
+	gui.Parent = handle
+
+	local bg = Instance.new("Frame")
+	bg.Size = UDim2.fromScale(1, 1)
+	bg.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+	bg.BackgroundTransparency = 0.2
+	bg.BorderSizePixel = 0
+	bg.Parent = gui
+	local fill = Instance.new("Frame")
+	fill.Size = UDim2.new(0, 0, 1, 0)
+	fill.BackgroundColor3 = GameConfig.CrusherLaser.Color
+	fill.BorderSizePixel = 0
+	fill.Parent = bg
+	return gui, fill
+end
+
+-- Визуальный луч из дула в направлении точки прицела.
+local function spawnLaserBeam(fromPos, toPos)
+	local cfg = GameConfig.CrusherLaser
+	local dir = (toPos - fromPos)
+	local length = math.min(dir.Magnitude, cfg.BaseBeamLength + 40)
+	if length < 1 then length = 1 end
+	local midpoint = fromPos + dir.Unit * (length / 2)
+
+	local beam = Instance.new("Part")
+	beam.Anchored = true
+	beam.CanCollide = false
+	beam.CanQuery = false
+	beam.CastShadow = false
+	beam.Material = Enum.Material.Neon
+	beam.Color = cfg.Color
+	beam.Size = Vector3.new(cfg.BeamThickness, cfg.BeamThickness, length)
+	beam.CFrame = CFrame.lookAt(midpoint, toPos)
+	beam.Transparency = 0.15
+	beam.Parent = workspace
+
+	local light = Instance.new("PointLight")
+	light.Color = cfg.Color
+	light.Range = 12
+	light.Brightness = 2.5
+	light.Parent = beam
+
+	local fade = TweenService:Create(beam, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {
+		Transparency = 1,
+		Size = Vector3.new(cfg.BeamThickness * 2.2, cfg.BeamThickness * 2.2, length),
+	})
+	fade:Play()
+	Debris:AddItem(beam, 0.3)
+end
+
+-- Время полного заряда с учётом уровня FireRate (читаем через урон? на клиенте нет
+-- доступа к уровням — используем базовое время; сервер всё равно подтверждает выстрел).
+local function chargeTimeFor()
+	-- Клиент не знает уровней прокачки, поэтому копит до базового времени; реальный
+	-- эффект скейла применяет сервер (длина/урон). Это лишь UX-таймер заряда.
+	return GameConfig.CrusherLaser.BaseChargeTime
 end
 
 -- ============================================================
@@ -151,15 +226,66 @@ local function fireBubbleCannon(tool)
 	end
 end
 
-local function fireCrusherDrill(tool)
+-- Выпуск заряженного лазера: рисуем луч и шлём цель (мусор/ресурс) на сервер.
+local function releaseLaser(tool)
 	if drillOverheated then return end
+	local fromPos = muzzlePosition(tool)
 	local result = raycastFromMouse()
-	if not result then return end
-
-	local target = findAncestorWithAttribute(result.Instance, "ResourceId")
-	if target then
-		FireDrillRemote:FireServer(target)
+	local toPos
+	if result then
+		toPos = result.Position
+	else
+		local unitRay = camera:ViewportPointToRay(mouse.X, mouse.Y)
+		toPos = unitRay.Origin + unitRay.Direction * GameConfig.CrusherLaser.BaseBeamLength
 	end
+
+	spawnLaserBeam(fromPos, toPos)
+
+	-- Лазер дробит ресурсные блоки И крупный мусор перед собой.
+	local target
+	if result then
+		target = findAncestorWithAttribute(result.Instance, "ResourceId")
+			or findAncestorWithAttribute(result.Instance, "Trash")
+	end
+	if target then
+		FireDrillRemote:FireServer(target, true) -- true = заряженный лазер
+	end
+end
+
+-- Заряд дробилки: зажал кнопку -> копится заряд (полоса над пушкой) -> при полном
+-- заряде выпускается лазер. Отпустил раньше -> заряд сбрасывается.
+local drillCharge = setmetatable({}, { __mode = "k" }) -- [tool] = { active=bool }
+
+local function startCharging(tool)
+	if drillOverheated then return end
+	local handle = tool:FindFirstChild("Handle")
+	if not handle then return end
+	if drillCharge[tool] and drillCharge[tool].active then return end
+
+	local state = { active = true }
+	drillCharge[tool] = state
+
+	task.spawn(function()
+		local gui, fill = makeChargeBar(handle)
+		local startClock = os.clock()
+		local fullTime = chargeTimeFor()
+		while state.active and tool.Parent do
+			local frac = math.clamp((os.clock() - startClock) / fullTime, 0, 1)
+			fill.Size = UDim2.new(frac, 0, 1, 0)
+			if frac >= 1 then
+				releaseLaser(tool)
+				break
+			end
+			RunService.RenderStepped:Wait()
+		end
+		state.active = false
+		if gui then gui:Destroy() end
+	end)
+end
+
+local function stopCharging(tool)
+	local state = drillCharge[tool]
+	if state then state.active = false end
 end
 
 -- ============================================================
@@ -174,13 +300,22 @@ local function hookTool(tool)
 	if tool.Name ~= "BubbleCannon" and tool.Name ~= "CrusherDrill" then return end
 	connectedTools[tool] = true
 
-	tool.Activated:Connect(function()
-		if tool.Name == "BubbleCannon" then
+	if tool.Name == "BubbleCannon" then
+		tool.Activated:Connect(function()
 			fireBubbleCannon(tool)
-		else
-			fireCrusherDrill(tool)
-		end
-	end)
+		end)
+	else
+		-- Дробилка: зажатие = заряд, отпускание = сброс/выстрел при полном заряде.
+		tool.Activated:Connect(function()
+			startCharging(tool)
+		end)
+		tool.Deactivated:Connect(function()
+			stopCharging(tool)
+		end)
+		tool.Unequipped:Connect(function()
+			stopCharging(tool)
+		end)
+	end
 end
 
 local function watchContainer(container)
