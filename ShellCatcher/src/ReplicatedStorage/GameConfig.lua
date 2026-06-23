@@ -431,6 +431,22 @@ GameConfig.Trash = {
 	},
 }
 
+-- ============================================================
+-- РЕСУРСНЫЕ УЗЛЫ (для Crusher Drill / лазера): кораллы, камни, кристаллы, рудные
+-- залежи. У каждого вида СВОЁ название (билборд), форма/размер, здоровье и какой
+-- ResourceId/Amount он даёт при разрушении — аналогично GameConfig.Trash.Kinds.
+-- ============================================================
+GameConfig.ResourceNodes = {
+	BaseHealth = 30,
+	Kinds = {
+		{ Id = "coral",       DisplayName = "Коралловый узел",  ResourceId = "shellfragment", Color = Color3.fromRGB(255, 130, 170), Shape = "Block",    Size = {2.4, 2.0, 2.4}, HealthMul = 0.7, AmountRange = {1, 2} },
+		{ Id = "rock",        DisplayName = "Камень",           ResourceId = "scrap",         Color = Color3.fromRGB(110, 110, 115), Shape = "Block",    Size = {3.0, 3.0, 3.0}, HealthMul = 1.0, AmountRange = {1, 3} },
+		{ Id = "crystal",     DisplayName = "Кристалл",         ResourceId = "darkpearl",     Color = Color3.fromRGB(150, 100, 255), Shape = "Block",    Size = {1.8, 3.2, 1.8}, HealthMul = 1.3, AmountRange = {1, 2} },
+		{ Id = "metal_vein",  DisplayName = "Рудная залежь",    ResourceId = "obsidianite",   Color = Color3.fromRGB(60, 70, 80),    Shape = "Cylinder", Size = {3.4, 2.6, 3.4}, HealthMul = 1.8, AmountRange = {2, 4} },
+		{ Id = "magma_vein",  DisplayName = "Магматическая жила", ResourceId = "magmacrystal",Color = Color3.fromRGB(230, 90, 40),   Shape = "Block",    Size = {2.8, 2.8, 2.8}, HealthMul = 2.2, AmountRange = {1, 3} },
+	},
+}
+
 -- Названия медуз по зоне (показываются билбордом над медузой)
 GameConfig.JellyfishNames = {
 	reef   = "Коралловая медуза",

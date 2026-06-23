@@ -19,7 +19,6 @@ local GameConfig = require(ReplicatedStorage:WaitForChild("GameConfig"))
 
 local ZoneSpawnerService = {}
 
-local RESOURCE_BLOCK_BASE_HEALTH = 30
 local MAX_RESOURCE_BLOCKS_PER_ZONE = 10
 local SPAWN_CHECK_INTERVAL = 3
 
@@ -276,21 +275,45 @@ local function spawnResourceBlock(zoneFolder, zoneConfig)
 	local point = randomPoint(zoneFolder:FindFirstChild("ResourceSpawnPoints"))
 	if not point then return end
 
-	local possibleResources = resourceIdsByHazard[zoneConfig.HazardLevel] or resourceIdsByHazard[0]
-	local resourceId = possibleResources[math.random(1, #possibleResources)]
+	-- Кораллы/камни/кристаллы/рудные залежи — отбираем виды, чьи ResourceId разрешены
+	-- для уровня опасности зоны (resourceIdsByHazard), затем берём случайный из них.
+	local allowedResourceIds = resourceIdsByHazard[zoneConfig.HazardLevel] or resourceIdsByHazard[0]
+	local allowedSet = {}
+	for _, id in ipairs(allowedResourceIds) do allowedSet[id] = true end
+
+	local candidates = {}
+	for _, kind in ipairs(GameConfig.ResourceNodes.Kinds) do
+		if allowedSet[kind.ResourceId] then
+			table.insert(candidates, kind)
+		end
+	end
+	if #candidates == 0 then candidates = GameConfig.ResourceNodes.Kinds end
+
+	local kind = candidates[math.random(1, #candidates)]
+	local size = kind.Size or {3, 3, 3}
+	local amountRange = kind.AmountRange or {1, 3}
 
 	local block = Instance.new("Part")
 	block.Name = "ResourceBlock"
-	block.Shape = Enum.PartType.Block
-	block.Size = Vector3.new(3, 3, 3)
+	block.Shape = kind.Shape == "Cylinder" and Enum.PartType.Cylinder or Enum.PartType.Block
+	block.Size = Vector3.new(size[1], size[2], size[3])
+	block.Color = kind.Color
 	block.Anchored = true
 	block.CanCollide = true
 	block.CFrame = point.CFrame
 	block.Material = Enum.Material.Rock
 
-	block:SetAttribute("Health", RESOURCE_BLOCK_BASE_HEALTH)
-	block:SetAttribute("ResourceId", resourceId)
-	block:SetAttribute("Amount", math.random(1, 3))
+	local maxHealth = math.max(1, math.floor(GameConfig.ResourceNodes.BaseHealth * (kind.HealthMul or 1)))
+	block:SetAttribute("Health", maxHealth)
+	block:SetAttribute("MaxHealth", maxHealth)
+	block:SetAttribute("ResourceId", kind.ResourceId)
+	block:SetAttribute("ResourceKind", kind.Id)
+	block:SetAttribute("Amount", math.random(amountRange[1], amountRange[2]))
+
+	local updateBar = attachInfoBillboard(block, kind.DisplayName or kind.Id, kind.Color, maxHealth, size[2] * 0.5 + 1.4)
+	block:GetAttributeChangedSignal("Health"):Connect(function()
+		updateBar(block:GetAttribute("Health") or 0)
+	end)
 
 	block.Parent = zoneFolder:FindFirstChild("Resources") or zoneFolder
 end
