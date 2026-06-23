@@ -1,7 +1,10 @@
 --[[
 	OxygenService.lua  (ServerScriptService)
 	Управляет "кислородом" — временным таймером, который тратится в зонах лова
-	и восстанавливается у базы. При обнулении — штраф по инвентарю и телепорт на базу.
+	и восстанавливается у базы. БЕЗОПАСНО вернуться домой можно только на подлодке
+	(ZoneService.ReturnToIsland вызывается оттуда явно). Если кислород закончился —
+	игрок ТОНЕТ: получает урон/умирает и теряет часть собранного улова, а респаун
+	(через стандартный Humanoid.Died) возвращает его на остров.
 ]]
 
 local Players = game:GetService("Players")
@@ -14,6 +17,7 @@ local SoundService = require(script.Parent:WaitForChild("SoundService"))
 
 local OxygenRemoteEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("OxygenUpdate")
 local AsphyxiateRemoteEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("PlayerAsphyxiated")
+local DrownedRemoteEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("PlayerDrowned")
 
 local OxygenService = {}
 
@@ -57,16 +61,51 @@ function OxygenService.SetZone(player, zoneId)
 	state.ZoneId = zoneId
 end
 
+local drowning = {} -- [userId] = true, защита от повторного триггера до респауна
+
+local function dropLootVisual(rootPart, lostCount)
+	if not rootPart or lostCount <= 0 then return end
+	for i = 1, math.min(lostCount, 8) do
+		local debris = Instance.new("Part")
+		debris.Shape = Enum.PartType.Ball
+		debris.Size = Vector3.new(0.8, 0.8, 0.8)
+		debris.Material = Enum.Material.Neon
+		debris.Color = Color3.fromRGB(255, 180, 90)
+		debris.CanCollide = false
+		debris.Position = rootPart.Position + Vector3.new(math.random(-2, 2), 1, math.random(-2, 2))
+		debris.Parent = workspace
+
+		local velocity = Vector3.new(math.random(-6, 6), math.random(2, 6), math.random(-6, 6))
+		task.spawn(function()
+			for _ = 1, 20 do
+				debris.Position += velocity * 0.05
+				velocity -= Vector3.new(0, 0.4, 0) -- лёгкая гравитация-заглушка
+				task.wait(0.05)
+			end
+			debris:Destroy()
+		end)
+	end
+end
+
+-- Игрок ТОНЕТ: часть улова теряется (выпадает, см. dropLootVisual), а сам игрок
+-- умирает — единственный способ безопасно вернуться домой это подлодка/Ferry,
+-- а не доводить кислород до нуля.
 local function handleAsphyxiation(player)
-	-- Штраф: теряем часть инвентаря (мягкое наказание, не полная потеря — по дизайну Shelldiver-жанра)
+	if drowning[player.UserId] then return end
+	drowning[player.UserId] = true
+
 	local profile = DataService.Get(player)
-	if not profile then return end
+	if not profile then
+		drowning[player.UserId] = false
+		return
+	end
 
 	local items = profile.Inventory.Items
 	local lossPercent = GameConfig.Oxygen.PenaltyLossPercent
 	local keepCount = math.ceil(#items * (1 - lossPercent))
+	local lostCount = math.max(0, #items - keepCount)
 
-	-- Оставляем самые ценные предметы, теряем остальное — чуть мягче для игрока
+	-- Оставляем самые ценные предметы, теряем остальное (выпадает за борт) — чуть мягче для игрока
 	table.sort(items, function(a, b) return a.Value > b.Value end)
 	for i = #items, keepCount + 1, -1 do
 		table.remove(items, i)
@@ -78,13 +117,23 @@ local function handleAsphyxiation(player)
 		state.ZoneId = nil
 	end
 
+	local character = player.Character
+	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+	dropLootVisual(rootPart, lostCount)
+
 	AsphyxiateRemoteEvent:FireClient(player)
+	DrownedRemoteEvent:FireClient(player, lostCount)
 	SoundService.PlayToPlayer("Asphyxiate", player)
 
-	-- Телепортируем игрока обратно на остров. Ленивый require, чтобы избежать
-	-- циклической зависимости (ZoneService требует OxygenService на верхнем уровне).
-	local ZoneService = require(script.Parent:WaitForChild("ZoneService"))
-	ZoneService.ReturnToIsland(player)
+	-- Смерть от удушья — респаун (Humanoid.Died -> CharacterAdded) сам вернёт игрока
+	-- на остров через onCharacterAdded в Main.server.lua.
+	if humanoid then
+		humanoid.Health = 0
+	end
+
+	drowning[player.UserId] = false
 end
 
 local lowOxygenWarningPlayed = {} -- [userId] = bool, чтобы не спамить звук каждую секунду
@@ -126,6 +175,8 @@ end)
 
 Players.PlayerRemoving:Connect(function(player)
 	runtimeState[player.UserId] = nil
+	drowning[player.UserId] = nil
+	lowOxygenWarningPlayed[player.UserId] = nil
 end)
 
 return OxygenService

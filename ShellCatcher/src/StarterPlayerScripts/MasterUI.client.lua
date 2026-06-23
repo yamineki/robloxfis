@@ -812,7 +812,15 @@ Remotes.OxygenUpdate.OnClientEvent:Connect(function(current, max)
 end)
 
 Remotes.PlayerAsphyxiated.OnClientEvent:Connect(function()
-	showToast("You ran out of oxygen! Some catches were lost.", THEME.AccentRed)
+	showToast("You ran out of oxygen!", THEME.AccentRed)
+end)
+
+Remotes.PlayerDrowned.OnClientEvent:Connect(function(lostCount)
+	if lostCount and lostCount > 0 then
+		showToast(("You drowned! Lost %d catches. Use the submarine to dive safely."):format(lostCount), THEME.AccentRed)
+	else
+		showToast("You drowned! Use the submarine to dive safely.", THEME.AccentRed)
+	end
 end)
 
 Remotes.CatchResult.OnClientEvent:Connect(function(resultData)
